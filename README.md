@@ -697,6 +697,27 @@ Here's a complete example of setting up multi-user authentication with streamabl
 }
 ```
 
+**Server/Data Center with Separate Credentials Example:**
+```json
+{
+  "mcpServers": {
+    "mcp-atlassian-service": {
+      "url": "http://localhost:9000/mcp",
+      "headers": {
+        "X-Atlassian-Jira-Token": "<JIRA_PERSONAL_ACCESS_TOKEN>",
+        "X-Atlassian-Jira-Username": "<JIRA_USERNAME>",
+        "X-Atlassian-Confluence-Token": "<CONFLUENCE_PERSONAL_ACCESS_TOKEN>",
+        "X-Atlassian-Confluence-Username": "<CONFLUENCE_USERNAME>"
+      }
+    }
+  }
+}
+```
+
+> [!TIP]
+> For more details on multi-user authentication with Data Center, see [Multi-user Authentication for Data Center](./docs/multi_user_data_center.md).
+</details>
+
 4. Required environment variables in `.env`:
    ```bash
    JIRA_URL=https://your-company.atlassian.net

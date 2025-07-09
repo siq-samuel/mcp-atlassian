@@ -179,6 +179,46 @@ async def get_jira_fetcher(ctx: Context) -> JiraFetcher:
         if hasattr(request.state, "jira_fetcher") and request.state.jira_fetcher:
             logger.debug("get_jira_fetcher: Returning JiraFetcher from request.state.")
             return request.state.jira_fetcher
+            
+        # Check for Jira-specific token first
+        jira_token = getattr(request.state, "user_jira_token", None)
+        user_jira_username = getattr(request.state, "user_jira_username", None)
+        
+        if jira_token:
+            logger.debug(f"get_jira_fetcher: Using Jira-specific token")
+            # Use explicitly provided Jira username
+            credentials = {"user_email_context": user_jira_username}
+            credentials["personal_access_token"] = jira_token
+            
+            lifespan_ctx_dict = ctx.request_context.lifespan_context  # type: ignore
+            app_lifespan_ctx: MainAppContext | None = (
+                lifespan_ctx_dict.get("app_lifespan_context")
+                if isinstance(lifespan_ctx_dict, dict)
+                else None
+            )
+            if not app_lifespan_ctx or not app_lifespan_ctx.full_jira_config:
+                raise ValueError(
+                    "Jira global configuration (URL, SSL) is not available from lifespan context."
+                )
+            
+            # Create user-specific JiraFetcher with the Jira-specific token
+            user_jira_config = _create_user_config_for_fetcher(
+                "jira",
+                app_lifespan_ctx.full_jira_config,
+                "pat",
+                credentials,
+                cloud_id=getattr(request.state, "user_atlassian_cloud_id", None),
+            )
+            user_jira_fetcher = JiraFetcher(user_jira_config)
+            
+            # Cache the fetcher in request.state
+            request.state.jira_fetcher = user_jira_fetcher
+            logger.debug(
+                f"Created user-specific JiraFetcher with Jira-specific token for user {user_jira_username or 'unknown'}"
+            )
+            return user_jira_fetcher
+        
+        # Fall back to global token if no Jira-specific token
         user_auth_type = getattr(request.state, "user_atlassian_auth_type", None)
         logger.debug(f"get_jira_fetcher: User auth type: {user_auth_type}")
         # If OAuth or PAT token is present, create user-specific fetcher
@@ -193,7 +233,11 @@ async def get_jira_fetcher(ctx: Context) -> JiraFetcher:
 
             if not user_token:
                 raise ValueError("User Atlassian token found in state but is empty.")
-            credentials = {"user_email_context": user_email}
+            
+            # Use explicitly provided username over email if available
+            username_for_context = user_email
+            credentials = {"user_email_context": username_for_context}
+            
             if user_auth_type == "oauth":
                 credentials["oauth_access_token"] = user_token
             elif user_auth_type == "pat":
@@ -289,6 +333,46 @@ async def get_confluence_fetcher(ctx: Context) -> ConfluenceFetcher:
                 "get_confluence_fetcher: Returning ConfluenceFetcher from request.state."
             )
             return request.state.confluence_fetcher
+            
+        # Check for Confluence-specific token first
+        confluence_token = getattr(request.state, "user_confluence_token", None)
+        user_confluence_username = getattr(request.state, "user_confluence_username", None)
+        
+        if confluence_token:
+            logger.debug(f"get_confluence_fetcher: Using Confluence-specific token")
+            # Use explicitly provided Confluence username
+            credentials = {"user_email_context": user_confluence_username}
+            credentials["personal_access_token"] = confluence_token
+            
+            lifespan_ctx_dict = ctx.request_context.lifespan_context  # type: ignore
+            app_lifespan_ctx: MainAppContext | None = (
+                lifespan_ctx_dict.get("app_lifespan_context")
+                if isinstance(lifespan_ctx_dict, dict)
+                else None
+            )
+            if not app_lifespan_ctx or not app_lifespan_ctx.full_confluence_config:
+                raise ValueError(
+                    "Confluence global configuration (URL, SSL) is not available from lifespan context."
+                )
+            
+            # Create user-specific ConfluenceFetcher with the Confluence-specific token
+            user_confluence_config = _create_user_config_for_fetcher(
+                "confluence",
+                app_lifespan_ctx.full_confluence_config,
+                "pat",
+                credentials,
+                cloud_id=getattr(request.state, "user_atlassian_cloud_id", None),
+            )
+            user_confluence_fetcher = ConfluenceFetcher(user_confluence_config)
+            
+            # Cache the fetcher in request.state
+            request.state.confluence_fetcher = user_confluence_fetcher
+            logger.debug(
+                f"Created user-specific ConfluenceFetcher with Confluence-specific token for user {user_confluence_username or 'unknown'}"
+            )
+            return user_confluence_fetcher
+        
+        # Fall back to global token if no Confluence-specific token
         user_auth_type = getattr(request.state, "user_atlassian_auth_type", None)
         logger.debug(f"get_confluence_fetcher: User auth type: {user_auth_type}")
         if user_auth_type in ["oauth", "pat"] and hasattr(
@@ -297,10 +381,15 @@ async def get_confluence_fetcher(ctx: Context) -> ConfluenceFetcher:
             user_token = getattr(request.state, "user_atlassian_token", None)
             user_email = getattr(request.state, "user_atlassian_email", None)
             user_cloud_id = getattr(request.state, "user_atlassian_cloud_id", None)
+            user_confluence_username = getattr(request.state, "user_confluence_username", None)
 
             if not user_token:
                 raise ValueError("User Atlassian token found in state but is empty.")
-            credentials = {"user_email_context": user_email}
+            
+            # Use explicitly provided username over email if available
+            username_for_context = user_confluence_username or user_email
+            credentials = {"user_email_context": username_for_context}
+            
             if user_auth_type == "oauth":
                 credentials["oauth_access_token"] = user_token
             elif user_auth_type == "pat":

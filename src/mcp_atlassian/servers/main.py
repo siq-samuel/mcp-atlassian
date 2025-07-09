@@ -240,6 +240,10 @@ class UserTokenMiddleware(BaseHTTPMiddleware):
         if request_path == mcp_path and request.method == "POST":
             auth_header = request.headers.get("Authorization")
             cloud_id_header = request.headers.get("X-Atlassian-Cloud-Id")
+            jira_username_header = request.headers.get("X-Atlassian-Jira-Username")
+            confluence_username_header = request.headers.get("X-Atlassian-Confluence-Username")
+            jira_token_header = request.headers.get("X-Atlassian-Jira-Token")
+            confluence_token_header = request.headers.get("X-Atlassian-Confluence-Token")
 
             token_for_log = mask_sensitive(
                 auth_header.split(" ", 1)[1].strip()
@@ -249,6 +253,44 @@ class UserTokenMiddleware(BaseHTTPMiddleware):
             logger.debug(
                 f"UserTokenMiddleware: Path='{request.url.path}', AuthHeader='{mask_sensitive(auth_header)}', ParsedToken(masked)='{token_for_log}', CloudId='{cloud_id_header}'"
             )
+
+            # Extract and save Jira username if provided
+            if jira_username_header and jira_username_header.strip():
+                request.state.user_jira_username = jira_username_header.strip()
+                logger.debug(
+                    f"UserTokenMiddleware: Extracted Jira username from header: {jira_username_header.strip()}"
+                )
+            else:
+                request.state.user_jira_username = None
+                
+            # Extract and save Confluence username if provided
+            if confluence_username_header and confluence_username_header.strip():
+                request.state.user_confluence_username = confluence_username_header.strip()
+                logger.debug(
+                    f"UserTokenMiddleware: Extracted Confluence username from header: {confluence_username_header.strip()}"
+                )
+            else:
+                request.state.user_confluence_username = None
+
+            # Extract and save Jira token if provided
+            if jira_token_header and jira_token_header.strip():
+                request.state.user_jira_token = jira_token_header.strip()
+                request.state.user_jira_auth_type = "pat"
+                logger.debug(
+                    f"UserTokenMiddleware: Extracted Jira token (masked): ...{mask_sensitive(jira_token_header.strip(), 8)}"
+                )
+            else:
+                request.state.user_jira_token = None
+                
+            # Extract and save Confluence token if provided
+            if confluence_token_header and confluence_token_header.strip():
+                request.state.user_confluence_token = confluence_token_header.strip()
+                request.state.user_confluence_auth_type = "pat"
+                logger.debug(
+                    f"UserTokenMiddleware: Extracted Confluence token (masked): ...{mask_sensitive(confluence_token_header.strip(), 8)}"
+                )
+            else:
+                request.state.user_confluence_token = None
 
             # Extract and save cloudId if provided
             if cloud_id_header and cloud_id_header.strip():
