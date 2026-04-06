@@ -241,9 +241,13 @@ class UserTokenMiddleware(BaseHTTPMiddleware):
             auth_header = request.headers.get("Authorization")
             cloud_id_header = request.headers.get("X-Atlassian-Cloud-Id")
             jira_username_header = request.headers.get("X-Atlassian-Jira-Username")
-            confluence_username_header = request.headers.get("X-Atlassian-Confluence-Username")
+            confluence_username_header = request.headers.get(
+                "X-Atlassian-Confluence-Username"
+            )
             jira_token_header = request.headers.get("X-Atlassian-Jira-Token")
-            confluence_token_header = request.headers.get("X-Atlassian-Confluence-Token")
+            confluence_token_header = request.headers.get(
+                "X-Atlassian-Confluence-Token"
+            )
 
             token_for_log = mask_sensitive(
                 auth_header.split(" ", 1)[1].strip()
@@ -262,10 +266,12 @@ class UserTokenMiddleware(BaseHTTPMiddleware):
                 )
             else:
                 request.state.user_jira_username = None
-                
+
             # Extract and save Confluence username if provided
             if confluence_username_header and confluence_username_header.strip():
-                request.state.user_confluence_username = confluence_username_header.strip()
+                request.state.user_confluence_username = (
+                    confluence_username_header.strip()
+                )
                 logger.debug(
                     f"UserTokenMiddleware: Extracted Confluence username from header: {confluence_username_header.strip()}"
                 )
@@ -281,7 +287,7 @@ class UserTokenMiddleware(BaseHTTPMiddleware):
                 )
             else:
                 request.state.user_jira_token = None
-                
+
             # Extract and save Confluence token if provided
             if confluence_token_header and confluence_token_header.strip():
                 request.state.user_confluence_token = confluence_token_header.strip()

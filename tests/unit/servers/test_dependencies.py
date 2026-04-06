@@ -377,6 +377,10 @@ def _setup_mock_request_state(mock_request, auth_scenario=None, cached_fetcher=N
 
     mock_request.state.jira_fetcher = None
     mock_request.state.confluence_fetcher = None
+    mock_request.state.user_jira_token = None
+    mock_request.state.user_jira_username = None
+    mock_request.state.user_confluence_token = None
+    mock_request.state.user_confluence_username = None
 
     if auth_scenario:
         mock_request.state.user_atlassian_auth_type = auth_scenario["auth_type"]
