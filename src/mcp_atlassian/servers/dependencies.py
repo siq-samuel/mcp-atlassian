@@ -632,9 +632,7 @@ async def _get_fetcher(ctx: Context, spec: _ServiceSpec) -> Any:
         # --- Branch 0: per-service token with global URL (X-Atlassian-{Service}-Token) ---
         # No URL header needed; uses global server URL + user-supplied service-specific PAT
         service_name_lower = spec.name.lower()
-        service_token = getattr(
-            request.state, f"user_{service_name_lower}_token", None
-        )
+        service_token = getattr(request.state, f"user_{service_name_lower}_token", None)
         service_username = getattr(
             request.state, f"user_{service_name_lower}_username", None
         )
@@ -659,6 +657,7 @@ async def _get_fetcher(ctx: Context, spec: _ServiceSpec) -> Any:
                 user_config,
                 "oauth_pat",
                 user_email=service_username,
+                attach_ssrf_hook=True,
             )
 
         user_auth_type = getattr(request.state, "user_atlassian_auth_type", None)
