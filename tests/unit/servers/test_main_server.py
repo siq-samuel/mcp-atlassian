@@ -243,6 +243,32 @@ class TestUserTokenMiddleware:
         assert passed_scope["state"]["user_atlassian_cloud_id"] == "test-cloud-id-123"
 
     @pytest.mark.anyio
+    async def test_service_token_header_without_url_sets_pat_auth_type(
+        self, middleware, mock_scope, mock_receive, mock_send
+    ):
+        """A per-service PAT header alone (no URL header, no Authorization) is PAT auth.
+
+        The URL header is optional; the dependency layer falls back to the
+        server-configured global URL. The request must therefore carry a user
+        identity and pass the unauthenticated-request gate.
+        """
+        mock_scope["headers"] = [
+            (b"x-atlassian-jira-personal-token", b"user-jira-pat"),
+        ]
+
+        await middleware(mock_scope, mock_receive, mock_send)
+
+        # Request is authenticated (not rejected) and forwarded to the app.
+        middleware.app.assert_called_once()
+        passed_scope = middleware.app.call_args[0][0]
+        assert passed_scope["state"]["user_atlassian_auth_type"] == "pat"
+        assert passed_scope["state"].get("auth_validation_error") in (None, "")
+        # The token is exposed to the dependency layer via service headers.
+        service_headers = passed_scope["state"]["atlassian_service_headers"]
+        assert service_headers["X-Atlassian-Jira-Personal-Token"] == "user-jira-pat"
+        assert "X-Atlassian-Jira-Url" not in service_headers
+
+    @pytest.mark.anyio
     async def test_empty_bearer_token_returns_401(
         self, middleware, mock_scope, mock_receive, mock_send
     ):

@@ -628,38 +628,6 @@ async def _get_fetcher(ctx: Context, spec: _ServiceSpec) -> Any:
         if cached:
             logger.debug(f"{fn_name}: Returning {spec.name}Fetcher from request.state.")
             return cached
-
-        # --- Branch 0: per-service token with global URL (X-Atlassian-{Service}-Token) ---
-        # No URL header needed; uses global server URL + user-supplied service-specific PAT
-        service_name_lower = spec.name.lower()
-        service_token = getattr(request.state, f"user_{service_name_lower}_token", None)
-        service_username = getattr(
-            request.state, f"user_{service_name_lower}_username", None
-        )
-        if service_token:
-            global_config = _get_global_config(ctx, spec)
-            credentials: dict[str, Any] = {
-                "user_email_context": service_username,
-                "personal_access_token": service_token,
-            }
-            logger.info(
-                f"Creating user-specific {spec.name}Fetcher "
-                f"(type: service-specific PAT) for user {service_username or 'unknown'}"
-            )
-            user_config = _create_user_config_for_fetcher(
-                base_config=global_config,
-                auth_type="pat",
-                credentials=credentials,
-            )
-            return _create_and_validate(
-                request,
-                spec,
-                user_config,
-                "oauth_pat",
-                user_email=service_username,
-                attach_ssrf_hook=True,
-            )
-
         user_auth_type = getattr(request.state, "user_atlassian_auth_type", None)
         logger.debug(f"{fn_name}: User auth type: {user_auth_type}")
 
@@ -668,18 +636,37 @@ async def _get_fetcher(ctx: Context, spec: _ServiceSpec) -> Any:
         token_header_val = service_headers.get(spec.token_header)
 
         # --- Branch 1: header-based PAT ---
+        # The URL header is optional. When it is omitted, the operator-configured
+        # global URL is used instead, letting a client present only a per-service
+        # PAT while the server pins the instance URL. This is the preferred
+        # multi-user Data Center pattern: the URL is never client-supplied, so it
+        # carries no SSRF surface, and Jira/Confluence can each receive a distinct
+        # PAT within a single request.
         if (
             user_auth_type == "pat"
-            and url_header_val
             and token_header_val
             and not hasattr(request.state, "user_atlassian_token")
         ):
+            effective_url = url_header_val
+            url_source = "header"
+            if not effective_url:
+                try:
+                    effective_url = _get_global_config(ctx, spec).url
+                except ValueError:
+                    effective_url = None
+                url_source = "global config"
+            if not effective_url:
+                raise ValueError(
+                    f"{spec.name} header-based PAT auth requires either the "
+                    f"{spec.url_header} header or a server-configured "
+                    f"{spec.name.upper()}_URL."
+                )
             logger.info(
                 f"Creating header-based {spec.name}Fetcher "
-                f"with URL: {url_header_val} and PAT token"
+                f"with URL: {effective_url} (from {url_source}) and PAT token"
             )
             header_config = spec.config_class(
-                url=url_header_val,
+                url=effective_url,
                 auth_type="pat",
                 personal_token=token_header_val,
                 **_get_header_pat_network_config(ctx, spec),

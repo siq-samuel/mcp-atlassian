@@ -553,14 +553,6 @@ class UserTokenMiddleware:
             )
             confluence_url_header = headers.get(b"x-atlassian-confluence-url")
 
-            # Per-service token headers for Data Center multi-user auth (no URL header needed)
-            jira_dc_token_header = headers.get(b"x-atlassian-jira-token")
-            jira_dc_username_header = headers.get(b"x-atlassian-jira-username")
-            confluence_dc_token_header = headers.get(b"x-atlassian-confluence-token")
-            confluence_dc_username_header = headers.get(
-                b"x-atlassian-confluence-username"
-            )
-
             # Convert service header bytes to strings
             jira_token_str = (
                 jira_token_header.decode("latin-1") if jira_token_header else None
@@ -576,26 +568,6 @@ class UserTokenMiddleware:
             confluence_url_str = (
                 confluence_url_header.decode("latin-1")
                 if confluence_url_header
-                else None
-            )
-
-            # Convert DC per-service header bytes to strings
-            jira_dc_token_str = (
-                jira_dc_token_header.decode("latin-1") if jira_dc_token_header else None
-            )
-            jira_dc_username_str = (
-                jira_dc_username_header.decode("latin-1")
-                if jira_dc_username_header
-                else None
-            )
-            confluence_dc_token_str = (
-                confluence_dc_token_header.decode("latin-1")
-                if confluence_dc_token_header
-                else None
-            )
-            confluence_dc_username_str = (
-                confluence_dc_username_header.decode("latin-1")
-                if confluence_dc_username_header
                 else None
             )
 
@@ -635,29 +607,6 @@ class UserTokenMiddleware:
                     f"UserTokenMiddleware: Extracted service headers: {list(service_headers.keys())}"
                 )
 
-            # Extract per-service tokens for Data Center multi-user auth
-            # (X-Atlassian-Jira-Token / X-Atlassian-Confluence-Token + optional username)
-            scope["state"]["user_jira_token"] = (
-                jira_dc_token_str.strip() if jira_dc_token_str else None
-            )
-            scope["state"]["user_jira_username"] = (
-                jira_dc_username_str.strip() if jira_dc_username_str else None
-            )
-            scope["state"]["user_confluence_token"] = (
-                confluence_dc_token_str.strip() if confluence_dc_token_str else None
-            )
-            scope["state"]["user_confluence_username"] = (
-                confluence_dc_username_str.strip()
-                if confluence_dc_username_str
-                else None
-            )
-            if jira_dc_token_str or confluence_dc_token_str:
-                logger.debug(
-                    "UserTokenMiddleware: Extracted DC per-service tokens: "
-                    f"Jira={'present' if jira_dc_token_str else 'absent'}, "
-                    f"Confluence={'present' if confluence_dc_token_str else 'absent'}"
-                )
-
             # Log mcp-session-id for debugging
             mcp_session_id = headers.get(b"mcp-session-id")
             if mcp_session_id:
@@ -684,11 +633,10 @@ class UserTokenMiddleware:
                 self._parse_auth_header(auth_header_str, scope)
             else:
                 logger.debug("UserTokenMiddleware: No Authorization header provided")
-                # If service headers are present without Authorization header, set PAT auth type
-                if service_headers and (
-                    (jira_token_str and jira_url_str)
-                    or (confluence_token_str and confluence_url_str)
-                ):
+                # A per-service PAT header sets PAT auth type. The matching URL
+                # header is optional: when absent, the dependency layer falls back
+                # to the server-configured global URL.
+                if service_headers and (jira_token_str or confluence_token_str):
                     scope["state"]["user_atlassian_auth_type"] = "pat"
                     scope["state"]["user_atlassian_email"] = None
                     logger.debug(
