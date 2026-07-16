@@ -122,6 +122,35 @@ Both transport types support per-request authentication where each user provides
   </Tab>
 </Tabs>
 
+### Per-Service PAT Headers (Server/Data Center)
+
+The `Authorization: Token <PAT>` header above applies a single token to both Jira
+and Confluence. When a user has **distinct PATs** for each product, send them as
+per-service headers instead:
+
+```json
+{
+  "mcpServers": {
+    "mcp-atlassian-service": {
+      "url": "http://localhost:9000/mcp",
+      "headers": {
+        "X-Atlassian-Jira-Personal-Token": "<USER_JIRA_PAT>",
+        "X-Atlassian-Confluence-Personal-Token": "<USER_CONFLUENCE_PAT>"
+      }
+    }
+  }
+}
+```
+
+The instance URL is taken from the server-configured `JIRA_URL` / `CONFLUENCE_URL`,
+so the client does not need to supply it. This is the recommended multi-user
+Data Center pattern: the operator pins the URL server-side (no client-supplied URL
+means no SSRF surface), and each request only carries the user's tokens.
+
+To point a request at a different instance per request, additionally send the
+matching `X-Atlassian-Jira-Url` / `X-Atlassian-Confluence-Url` header. Per-request
+URLs are validated against `MCP_ALLOWED_URL_DOMAINS` and must be on the allowlist.
+
 ### Server Setup for Multi-User
 
 <Steps>

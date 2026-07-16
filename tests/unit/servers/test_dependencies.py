@@ -631,6 +631,71 @@ class TestGetJiraFetcher:
 
     @patch("mcp_atlassian.servers.dependencies.get_http_request")
     @patch("mcp_atlassian.servers.dependencies.JiraFetcher")
+    async def test_header_based_jira_fetcher_falls_back_to_global_url(
+        self,
+        mock_jira_fetcher_class,
+        mock_get_http_request,
+        mock_context,
+        mock_request,
+        config_factory,
+    ):
+        """Header PAT without a URL header uses the server-configured global URL.
+
+        This is the preferred multi-user Data Center pattern: the client sends
+        only a per-service PAT and the operator pins the instance URL server-side.
+        """
+        # Note: no X-Atlassian-Jira-Url header supplied.
+        service_headers = {
+            "X-Atlassian-Jira-Personal-Token": "test-pat-token",
+        }
+
+        class MockState:
+            def __init__(self):
+                self.jira_fetcher = None
+                self.user_atlassian_auth_type = "pat"
+                self.user_atlassian_email = None
+                self.atlassian_service_headers = service_headers
+
+            def __getattr__(self, name):
+                if name == "user_atlassian_token":
+                    raise AttributeError(
+                        f"'{type(self).__name__}' object has no attribute '{name}'"
+                    )
+                return None
+
+        mock_request.state = MockState()
+        mock_get_http_request.return_value = mock_request
+
+        app_context = config_factory.create_app_context(
+            jira_config=config_factory.create_jira_config(
+                url="https://global.example.net",
+                ssl_verify=False,
+                projects_filter=["GLOBAL"],
+            )
+        )
+        _setup_mock_context(mock_context, app_context)
+
+        mock_fetcher = _create_mock_fetcher(JiraFetcher)
+        mock_jira_fetcher_class.return_value = mock_fetcher
+
+        result = await get_jira_fetcher(mock_context)
+
+        assert result == mock_fetcher
+        mock_jira_fetcher_class.assert_called_once()
+
+        called_config = mock_jira_fetcher_class.call_args[1]["config"]
+        assert called_config.auth_type == "pat"
+        # URL is inherited from the global config, not a request header.
+        assert called_config.url == "https://global.example.net"
+        assert called_config.personal_token == "test-pat-token"
+        # Network settings still come from the global config.
+        assert called_config.ssl_verify is False
+        # Per-request URL selection must never inherit instance-specific headers.
+        assert called_config.custom_headers is None
+        assert called_config.projects_filter is None
+
+    @patch("mcp_atlassian.servers.dependencies.get_http_request")
+    @patch("mcp_atlassian.servers.dependencies.JiraFetcher")
     async def test_header_based_jira_fetcher_inherits_network_when_wpad_disabled(
         self,
         mock_jira_fetcher_class,
@@ -1296,6 +1361,68 @@ class TestGetConfluenceFetcher:
         assert called_config.spaces_filter is None
         assert called_config.proxy_wpad_enable is True
         assert called_config.proxy_wpad_url == "http://wpad.example.com/wpad.dat"
+
+    @patch("mcp_atlassian.servers.dependencies.get_http_request")
+    @patch("mcp_atlassian.servers.dependencies.ConfluenceFetcher")
+    async def test_header_based_confluence_fetcher_falls_back_to_global_url(
+        self,
+        mock_confluence_fetcher_class,
+        mock_get_http_request,
+        mock_context,
+        mock_request,
+        config_factory,
+    ):
+        """Header PAT without a URL header uses the server-configured global URL."""
+        # Note: no X-Atlassian-Confluence-Url header supplied.
+        service_headers = {
+            "X-Atlassian-Confluence-Personal-Token": "test-confluence-pat-token",
+        }
+
+        class MockState:
+            def __init__(self):
+                self.confluence_fetcher = None
+                self.user_atlassian_auth_type = "pat"
+                self.user_atlassian_email = None
+                self.atlassian_service_headers = service_headers
+
+            def __getattr__(self, name):
+                if name == "user_atlassian_token":
+                    raise AttributeError(
+                        f"'{type(self).__name__}' object has no attribute '{name}'"
+                    )
+                return None
+
+        mock_request.state = MockState()
+        mock_get_http_request.return_value = mock_request
+
+        app_context = config_factory.create_app_context(
+            confluence_config=config_factory.create_confluence_config(
+                url="https://global.example.net/wiki",
+                ssl_verify=False,
+                spaces_filter=["GLOBAL"],
+            )
+        )
+        _setup_mock_context(mock_context, app_context)
+
+        user_info = {"email": "user@example.com", "displayName": "Test User"}
+        mock_fetcher = _create_mock_fetcher(
+            ConfluenceFetcher, validation_return=user_info
+        )
+        mock_confluence_fetcher_class.return_value = mock_fetcher
+
+        result = await get_confluence_fetcher(mock_context)
+
+        assert result == mock_fetcher
+        mock_confluence_fetcher_class.assert_called_once()
+
+        called_config = mock_confluence_fetcher_class.call_args[1]["config"]
+        assert called_config.auth_type == "pat"
+        # URL is inherited from the global config, not a request header.
+        assert called_config.url == "https://global.example.net/wiki"
+        assert called_config.personal_token == "test-confluence-pat-token"
+        assert called_config.ssl_verify is False
+        assert called_config.custom_headers is None
+        assert called_config.spaces_filter is None
 
     @patch("mcp_atlassian.servers.dependencies.get_http_request")
     @patch("mcp_atlassian.servers.dependencies.ConfluenceFetcher")

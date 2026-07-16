@@ -633,11 +633,10 @@ class UserTokenMiddleware:
                 self._parse_auth_header(auth_header_str, scope)
             else:
                 logger.debug("UserTokenMiddleware: No Authorization header provided")
-                # If service headers are present without Authorization header, set PAT auth type
-                if service_headers and (
-                    (jira_token_str and jira_url_str)
-                    or (confluence_token_str and confluence_url_str)
-                ):
+                # A per-service PAT header sets PAT auth type. The matching URL
+                # header is optional: when absent, the dependency layer falls back
+                # to the server-configured global URL.
+                if service_headers and (jira_token_str or confluence_token_str):
                     scope["state"]["user_atlassian_auth_type"] = "pat"
                     scope["state"]["user_atlassian_email"] = None
                     logger.debug(
